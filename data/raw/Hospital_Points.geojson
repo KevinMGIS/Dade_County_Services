@@ -1,0 +1,12 @@
+{
+"type": "FeatureCollection",
+"name": "Hospital_Points",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "OBJECTID": 1, "NAME": "Nicklaus Children's Hospital", "CREATEBY": null, "CREATEDATE": null, "MODIFYBY": null, "MODIFYDATE": null }, "geometry": { "type": "Point", "coordinates": [ -80.294509508699136, 25.74121054609493 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 2, "NAME": "West Kendall Baptist Hospital", "CREATEBY": null, "CREATEDATE": null, "MODIFYBY": null, "MODIFYDATE": null }, "geometry": { "type": "Point", "coordinates": [ -80.455583473785893, 25.678348195100494 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 3, "NAME": "South Miami Hospital East Tower", "CREATEBY": null, "CREATEDATE": null, "MODIFYBY": null, "MODIFYDATE": null }, "geometry": { "type": "Point", "coordinates": [ -80.292903814029174, 25.702409796111578 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 4, "NAME": "Coral Gables Hospital", "CREATEBY": null, "CREATEDATE": null, "MODIFYBY": null, "MODIFYDATE": null }, "geometry": { "type": "Point", "coordinates": [ -80.254740550912359, 25.74346761240492 ] } },
+{ "type": "Feature", "properties": { "OBJECTID": 5, "NAME": "Douglas Gardens Hospital - Miami Jewish Health Systems", "CREATEBY": null, "CREATEDATE": null, "MODIFYBY": null, "MODIFYDATE": null }, "geometry": { "type": "Point", "coordinates": [ -80.192303058712568, 25.823020293427394 ] } }
+]
+}

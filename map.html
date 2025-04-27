@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dade County Services Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Mapbox GL JS CSS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+    #loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      font-size: 16px;
+      z-index: 999;
+    }
+
+    #legend {
+      position: absolute;
+      bottom: 30px;
+      left: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-family: 'Arial', sans-serif;
+      font-size: 13px;
+      color: #333;
+    }
+
+    #legend h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .color-box {
+      width: 14px;
+      height: 14px;
+      display: inline-block;
+      margin-right: 8px;
+      border-radius: 3px;
+    }
+
+    /* Splash Modal Styles */
+    #splash-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #splash-content {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    #splash-close {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #0074D9;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <div style="position:absolute; top:10px; left:10px; z-index:1; background:white; padding:8px 10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-size:13px;">
+    <button id="resetView" style="padding:6px 10px; background:white; border:none; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.3); cursor:pointer;">Reset View</button>
+  </div>
+  <div style="position:absolute; top:56px; left:10px; z-index:1; background:white; padding:10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-size:13px;">
+    <label for="gradeFilter"><strong>Filter Schools:</strong></label><br/>
+    <select id="gradeFilter">
+      <option value="">All Grades</option>
+      <option value="K-5">K-5</option>
+      <option value="6-8">6-8</option>
+      <option value="9-12">9-12</option>
+    </select>
+  </div>
+  <div id="loading-spinner">
+    Loading Map...
+  </div>
+  <!-- Splash Modal HTML -->
+  <div id="splash-modal">
+    <div id="splash-content">
+      <h2>Welcome to the Dade County Services Map!</h2>
+      <p>Explore public services across Miami-Dade County.</p>
+      <button id="splash-close">Start Exploring</button>
+    </div>
+  </div>
+  <div id="map"></div>
+
+  <div id="legend">
+    <h3>Legend</h3>
+    <p style="font-size:11px; margin-top:0; margin-bottom:8px;">Municipal Boundaries are shaded by City.</p>
+    <div class="legend-item">
+      <input type="checkbox" id="toggle-fire">
+      <span class="color-box" style="background:#FF4136;"></span>Fire Stations
+    </div>
+    <div class="legend-item">
+      <input type="checkbox" id="toggle-hospitals">
+      <span class="color-box" style="background:#0074D9;"></span>Hospitals
+    </div>
+    <div class="legend-item">
+      <input type="checkbox" id="toggle-police">
+      <span class="color-box" style="background:#001f3f;"></span>Police Stations
+    </div>
+    <div class="legend-item">
+      <input type="checkbox" id="toggle-schools">
+      <span class="color-box" style="background:#2ECC40;"></span>Schools
+    </div>
+  </div>
+
+  <!-- Mapbox GL JS Script -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  
+  <script>
+    // Your Mapbox Access Token
+    mapboxgl.accessToken = 'pk.eyJ1Ijoia2V2aW5tZ2lzIiwiYSI6ImNtOTY3bnJtbzFoN3Iybm9tZXkzNXg1d2QifQ.CM5JgkXadbZBg4hb0jtMjQ';
+
+    // Create the map
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/dark-v10', // Base map style changed to dark mode
+      center: [-80.375, 25.610], // Centered roughly on the middle of Miami-Dade County
+      zoom: 9
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    // Fetch and display municipal boundaries from Supabase
+    map.on('load', async () => {
+      const response = await fetch('https://zqrccuqwfpcmrvwvgfjy.supabase.co/rest/v1/view_municipal_boundary?select=*', {
+        headers: {
+          apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxcmNjdXF3ZnBjbXJ2d3ZnZmp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU3NTc0MTgsImV4cCI6MjA2MTMzMzQxOH0.OiLcD_HAG0_syZqY4yCp4Wq0dzHx24CAvJPTSYEXMn8',
+          Authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxcmNjdXF3ZnBjbXJ2d3ZnZmp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU3NTc0MTgsImV4cCI6MjA2MTMzMzQxOH0.OiLcD_HAG0_syZqY4yCp4Wq0dzHx24CAvJPTSYEXMn8'
+        }
+      });
+
+      const data = await response.json();
+      console.log('Fetched data:', data);
+
+      // Define a function to generate random hex colors
+      function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+          color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+      }
+
+      const colors = {}; // Dictionary to store unique colors for each city
+
+      const geojson = {
+        type: 'FeatureCollection',
+        features: data.map(feature => {
+            const cityName = feature.name || 'Unknown';
+            if (!colors[cityName]) {
+              colors[cityName] = getRandomColor();
+            }
+            return {
+              type: 'Feature',
+              geometry: feature.geometry,
+              properties: {
+                name: cityName,
+                id: feature.id,
+                color: colors[cityName]
+              }
+            };
+          })
+      };
+
+      map.addSource('municipalities', {
+        type: 'geojson',
+        data: geojson
+      });
+
+
+      map.addLayer({
+        id: 'municipality-fill',
+        type: 'fill',
+        source: 'municipalities',
+        paint: {
+          'fill-color': ['get', 'color'],
+          'fill-opacity': 0.6
+        }
+      });
+
+      map.addLayer({
+        id: 'municipality-outline',
+        type: 'line',
+        source: 'municipalities',
+        paint: {
+          'line-color': '#888',
+          'line-width': 2
+        }
+      });
+
+      // Fetch service layers
+      const fireResponse = await fetch('data/Fire_Stations.geojson');
+      const fireData = await fireResponse.json();
+
+      const hospitalResponse = await fetch('data/Hospitals.geojson');
+      const hospitalData = await hospitalResponse.json();
+
+      const policeResponse = await fetch('data/Police_Stations.geojson');
+      const policeData = await policeResponse.json();
+
+      // Add Fire Stations
+      map.addSource('fire-stations', {
+        type: 'geojson',
+        data: fireData,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50
+      });
+
+      map.addLayer({
+        id: 'fire-stations-layer',
+        type: 'circle',
+        source: 'fire-stations',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#FF4136', // red
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#fff'
+        }
+      });
+
+      // Cluster circles
+      map.addLayer({
+        id: 'fire-stations-clusters',
+        type: 'circle',
+        source: 'fire-stations',
+        filter: ['has', 'point_count'],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-color': '#FF4136', // Fire Stations Red
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            15,
+            10,
+            20,
+            30,
+            25
+          ]
+        }
+      });
+
+      // Cluster count labels
+      map.addLayer({
+        id: 'fire-stations-cluster-count',
+        type: 'symbol',
+        source: 'fire-stations',
+        filter: ['has', 'point_count'],
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      });
+
+      // Add Hospitals
+      map.addSource('hospitals', {
+        type: 'geojson',
+        data: hospitalData,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50
+      });
+
+      map.addLayer({
+        id: 'hospitals-layer',
+        type: 'circle',
+        source: 'hospitals',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#0074D9', // blue
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#fff'
+        }
+      });
+
+      // Cluster circles
+      map.addLayer({
+        id: 'hospitals-clusters',
+        type: 'circle',
+        source: 'hospitals',
+        filter: ['has', 'point_count'],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-color': '#0074D9', // Hospitals Blue
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            15,
+            10,
+            20,
+            30,
+            25
+          ]
+        }
+      });
+
+      // Cluster count labels
+      map.addLayer({
+        id: 'hospitals-cluster-count',
+        type: 'symbol',
+        source: 'hospitals',
+        filter: ['has', 'point_count'],
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      });
+
+      // Add Police Stations
+      map.addSource('police-stations', {
+        type: 'geojson',
+        data: policeData,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50
+      });
+
+      map.addLayer({
+        id: 'police-stations-layer',
+        type: 'circle',
+        source: 'police-stations',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#001f3f', // dark blue
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#fff'
+        }
+      });
+
+      // Cluster circles
+      map.addLayer({
+        id: 'police-stations-clusters',
+        type: 'circle',
+        source: 'police-stations',
+        filter: ['has', 'point_count'],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-color': '#001f3f', // Police Stations Dark Blue
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            15,
+            10,
+            20,
+            30,
+            25
+          ]
+        }
+      });
+
+      // Cluster count labels
+      map.addLayer({
+        id: 'police-stations-cluster-count',
+        type: 'symbol',
+        source: 'police-stations',
+        filter: ['has', 'point_count'],
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      });
+
+      // Fetch Schools
+      const schoolsResponse = await fetch('data/Schools.geojson');
+      const schoolsData = await schoolsResponse.json();
+
+      // Add Schools
+      map.addSource('schools', {
+        type: 'geojson',
+        data: schoolsData,
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 50
+      });
+
+      map.addLayer({
+        id: 'schools-layer',
+        type: 'circle',
+        source: 'schools',
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#2ECC40', // green
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#fff'
+        }
+      });
+
+      // Cluster circles
+      map.addLayer({
+        id: 'schools-clusters',
+        type: 'circle',
+        source: 'schools',
+        filter: ['has', 'point_count'],
+        layout: { visibility: 'none' },
+        paint: {
+          'circle-color': '#2ECC40', // Schools Green
+          'circle-radius': [
+            'step',
+            ['get', 'point_count'],
+            15,
+            10,
+            20,
+            30,
+            25
+          ]
+        }
+      });
+
+      // Cluster count labels
+      map.addLayer({
+        id: 'schools-cluster-count',
+        type: 'symbol',
+        source: 'schools',
+        filter: ['has', 'point_count'],
+        layout: {
+          visibility: 'none',
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
+          'text-size': 12
+        },
+        paint: {
+          'text-color': '#ffffff'
+        }
+      });
+
+      // Toggle visibility
+      document.getElementById('toggle-fire').addEventListener('change', (e) => {
+        map.setLayoutProperty('fire-stations-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('fire-stations-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('fire-stations-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+      });
+
+      document.getElementById('toggle-hospitals').addEventListener('change', (e) => {
+        map.setLayoutProperty('hospitals-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('hospitals-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('hospitals-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+      });
+
+      document.getElementById('toggle-police').addEventListener('change', (e) => {
+        map.setLayoutProperty('police-stations-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('police-stations-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('police-stations-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+      });
+
+      document.getElementById('toggle-schools').addEventListener('change', (e) => {
+        map.setLayoutProperty('schools-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('schools-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+        map.setLayoutProperty('schools-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+      });
+
+      // Fire Stations popup
+      map.on('click', 'fire-stations-layer', (e) => {
+        const props = e.features[0].properties;
+        const html = `
+          <strong>Fire Station:</strong> ${props.NAME || 'N/A'}<br>
+          <strong>Address:</strong> ${props.ADDRESS || 'N/A'}<br>
+          <strong>City:</strong> ${props.CITY || 'N/A'}<br>
+          <strong>Zip:</strong> ${props.ZIPCODE || 'N/A'}
+        `;
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(html)
+          .addTo(map);
+      });
+
+      // Hospitals popup
+      map.on('click', 'hospitals-layer', (e) => {
+        const props = e.features[0].properties;
+        const html = `
+          <strong>Hospital:</strong> ${props.NAME || 'N/A'}
+        `;
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(html)
+          .addTo(map);
+      });
+
+      // Police Stations popup
+      map.on('click', 'police-stations-layer', (e) => {
+        const props = e.features[0].properties;
+        const html = `
+          <strong>Police Station:</strong> ${props.NAME || 'N/A'}<br>
+          <strong>Address:</strong> ${props.ADDRESS || 'N/A'}<br>
+          <strong>City:</strong> ${props.CITY || 'N/A'}<br>
+          <strong>Zip:</strong> ${props.ZIPCODE || 'N/A'}
+        `;
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(html)
+          .addTo(map);
+      });
+
+      // Schools popup
+      map.on('click', 'schools-layer', (e) => {
+        const props = e.features[0].properties;
+        const html = `
+          <strong>School:</strong> ${props.NAME || 'N/A'}<br>
+          <strong>Address:</strong> ${props.ADDRESS || 'N/A'}<br>
+          <strong>City:</strong> ${props.CITY || 'N/A'}<br>
+          <strong>Zip:</strong> ${props.ZIPCODE || 'N/A'}<br>
+          <strong>Grades:</strong> ${props.GRADE || props.GRADES || 'N/A'}
+        `;
+        new mapboxgl.Popup()
+          .setLngLat(e.lngLat)
+          .setHTML(html)
+          .addTo(map);
+      });
+
+      // Animate zoom on cluster click
+      map.on('click', 'fire-stations-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['fire-stations-clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('fire-stations').getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: zoom
+          });
+        });
+      });
+
+      map.on('click', 'hospitals-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['hospitals-clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('hospitals').getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: zoom
+          });
+        });
+      });
+
+      map.on('click', 'police-stations-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['police-stations-clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('police-stations').getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: zoom
+          });
+        });
+      });
+
+      map.on('click', 'schools-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['schools-clusters'] });
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('schools').getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return;
+          map.easeTo({
+            center: features[0].geometry.coordinates,
+            zoom: zoom
+          });
+        });
+      });
+
+      // Hide loading spinner after all layers/features are loaded
+      document.getElementById('loading-spinner').style.display = 'none';
+    });
+
+    // Filtering dropdown for schools
+    document.getElementById('gradeFilter').addEventListener('change', (e) => {
+      const selected = e.target.value;
+      if (selected) {
+        map.setFilter('schools-layer', ['==', ['get', 'GRADE'], selected]);
+      } else {
+        map.setFilter('schools-layer', null);
+      }
+    });
+
+    // Reset View button
+    document.getElementById('resetView').addEventListener('click', () => {
+      map.flyTo({ center: [-80.375, 25.610], zoom: 9 });
+    });
+
+    // Splash Modal Functionality
+    document.getElementById('splash-close').addEventListener('click', () => {
+      document.getElementById('splash-modal').style.display = 'none';
+    });
+
+    // Change mouse cursor to pointer when hovering over points and clusters
+    const hoverLayers = [
+      'fire-stations-layer',
+      'fire-stations-clusters',
+      'hospitals-layer',
+      'hospitals-clusters',
+      'police-stations-layer',
+      'police-stations-clusters',
+      'schools-layer',
+      'schools-clusters'
+    ];
+
+    hoverLayers.forEach(layer => {
+      map.on('mouseenter', layer, () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', layer, () => {
+        map.getCanvas().style.cursor = '';
+      });
+    });
+  </script>
+</body>
+</html>
