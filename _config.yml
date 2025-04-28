@@ -1,0 +1,4 @@
+# _config.yml
+title: "GISNerd"
+description: "Earthquake Data Visualization"
+theme: minima

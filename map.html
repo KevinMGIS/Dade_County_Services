@@ -9,8 +9,11 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
 
   <style>
-    body { margin: 0; padding: 0; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    body { margin: 0; padding: 0; background-color: #121212; }
+    #map {
+      flex: 1;
+      height: 100%;
+    }
 
     #loading-spinner {
       position: absolute;
@@ -29,13 +32,13 @@
       position: absolute;
       bottom: 30px;
       left: 10px;
-      background: white;
+      background: #1e1e1e;
       padding: 15px;
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
       font-family: 'Arial', sans-serif;
       font-size: 13px;
-      color: #333;
+      color: #ccc;
     }
 
     #legend h3 {
@@ -71,10 +74,11 @@
       z-index: 1000;
     }
     #splash-content {
-      background: white;
+      background: #1e1e1e;
       padding: 30px;
       border-radius: 8px;
       text-align: center;
+      color: #ccc;
     }
     #splash-close {
       margin-top: 20px;
@@ -89,10 +93,11 @@
 </head>
 
 <body>
-  <div style="position:absolute; top:10px; left:10px; z-index:1; background:white; padding:8px 10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-size:13px;">
-    <button id="resetView" style="padding:6px 10px; background:white; border:none; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.3); cursor:pointer;">Reset View</button>
+<div id="main-container" style="display:flex; height:100vh; width:100vw;">
+  <div style="position:absolute; top:10px; left:10px; z-index:1; background:#1e1e1e; color:#ccc; padding:8px 10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.5); font-size:13px;">
+    <button id="resetView" style="padding:6px 10px; background:#1e1e1e; color:#ccc; border:none; border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,0.5); cursor:pointer;">Reset View</button>
   </div>
-  <div style="position:absolute; top:56px; left:10px; z-index:1; background:white; padding:10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-size:13px;">
+  <div style="position:absolute; top:56px; left:10px; z-index:1; background:#1e1e1e; color:#ccc; padding:10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.5); font-size:13px;">
     <label for="gradeFilter"><strong>Filter Schools:</strong></label><br/>
     <select id="gradeFilter">
       <option value="">All Grades</option>
@@ -109,7 +114,39 @@
     <div id="splash-content">
       <h2>Welcome to the Dade County Services Map!</h2>
       <p>Explore public services across Miami-Dade County.</p>
+      <p>This site is for infrormational purposes only.</p>
+      <p>This site was built as a coding exercise and not inteneded to be used for real analysis.</p>
       <button id="splash-close">Start Exploring</button>
+    </div>
+  </div>
+  <div id="query-panel" style="position:absolute; top:120px; left:10px; z-index:1; background:#1e1e1e; color:#ccc; padding:10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.5); font-size:13px; width:220px;">
+    <label for="layerSelect"><strong>Select Layer:</strong></label><br/>
+    <select id="layerSelect" style="width:100%; margin-bottom:8px;">
+      <option value="schools">Schools</option>
+      <option value="hospitals">Hospitals</option>
+      <option value="fire-stations">Fire Stations</option>
+      <option value="police-stations">Police Stations</option>
+    </select>
+
+    <label for="searchInput"><strong>Search:</strong></label><br/>
+    <input type="text" id="searchInput" placeholder="Enter name or city" style="width:100%; margin-bottom:8px; padding:4px;"/>
+
+    <button id="searchButton" style="padding:6px 10px; background:#0074D9; color:white; border:none; border-radius:4px; width:100%; cursor:pointer;">Search</button>
+    <button id="clearSearchButton" style="padding:6px 10px; background:#FF4136; color:white; border:none; border-radius:4px; width:100%; cursor:pointer; margin-top:5px;">Clear Search</button>
+
+    <div id="searchResults" style="margin-top:10px; max-height:200px; overflow-y:auto; font-size:12px;"></div>
+  </div>
+  <div id="nearby-panel" style="position:absolute; top:10px; right:40px; z-index:1; background:#1e1e1e; color:#ccc; padding:10px; border-radius:5px; box-shadow:0 2px 6px rgba(0,0,0,0.5); font-size:13px; width:220px;">
+    <label for="nearbyDistance"><strong>Search Nearby:</strong></label><br/>
+    <select id="nearbyDistance" style="width:100%; margin-bottom:8px;">
+      <option value="0.5">0.5 miles</option>
+      <option value="1">1 mile</option>
+      <option value="2">2 miles</option>
+      <option value="5">5 miles</option>
+    </select>
+    <button id="enableNearbySearch" style="padding:6px 10px; background:#2ECC40; color:white; border:none; border-radius:4px; width:100%; cursor:pointer;">Enable Nearby Search</button>
+    <div id="nearbyScrollContainer" style="margin-top:10px; max-height:220px; overflow-y:auto;">
+      <div id="nearbyResults" style="font-size:12px;"></div>
     </div>
   </div>
   <div id="map"></div>
@@ -117,6 +154,10 @@
   <div id="legend">
     <h3>Legend</h3>
     <p style="font-size:11px; margin-top:0; margin-bottom:8px;">Municipal Boundaries are shaded by City.</p>
+    <div class="legend-item">
+      <input type="checkbox" id="toggle-schools-heatmap">
+      <span class="color-box" style="background:#FFEB3B;"></span>Schools Heatmap
+    </div>
     <div class="legend-item">
       <input type="checkbox" id="toggle-fire">
       <span class="color-box" style="background:#FF4136;"></span>Fire Stations
@@ -137,6 +178,8 @@
 
   <!-- Mapbox GL JS Script -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <!-- Turf.js for geospatial calculations -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   
   <script>
     // Your Mapbox Access Token
@@ -424,6 +467,34 @@
         clusterRadius: 50
       });
 
+      // Add Schools Heatmap Layer
+      map.addLayer({
+        id: 'schools-heatmap',
+        type: 'heatmap',
+        source: 'schools',
+        maxzoom: 15,
+        paint: {
+          'heatmap-weight': 1,
+          'heatmap-intensity': 1,
+          'heatmap-color': [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0, 'rgba(0, 0, 255, 0)',
+            0.2, 'royalblue',
+            0.4, 'cyan',
+            0.6, 'lime',
+            0.8, 'yellow',
+            1, 'red'
+          ],
+          'heatmap-radius': 25,
+          'heatmap-opacity': 0.7
+        },
+        layout: {
+          visibility: 'none' // Start with it hidden
+        }
+      });
+
       map.addLayer({
         id: 'schools-layer',
         type: 'circle',
@@ -475,30 +546,35 @@
         }
       });
 
-      // Toggle visibility
-      document.getElementById('toggle-fire').addEventListener('change', (e) => {
-        map.setLayoutProperty('fire-stations-layer', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('fire-stations-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('fire-stations-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
-      });
 
-      document.getElementById('toggle-hospitals').addEventListener('change', (e) => {
-        map.setLayoutProperty('hospitals-layer', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('hospitals-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('hospitals-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
-      });
+    // Toggle visibility
+    document.getElementById('toggle-fire').addEventListener('change', (e) => {
+      map.setLayoutProperty('fire-stations-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('fire-stations-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('fire-stations-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+    });
 
-      document.getElementById('toggle-police').addEventListener('change', (e) => {
-        map.setLayoutProperty('police-stations-layer', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('police-stations-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('police-stations-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
-      });
+    document.getElementById('toggle-schools-heatmap').addEventListener('change', (e) => {
+      map.setLayoutProperty('schools-heatmap', 'visibility', e.target.checked ? 'visible' : 'none');
+    });
 
-      document.getElementById('toggle-schools').addEventListener('change', (e) => {
-        map.setLayoutProperty('schools-layer', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('schools-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
-        map.setLayoutProperty('schools-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
-      });
+    document.getElementById('toggle-hospitals').addEventListener('change', (e) => {
+      map.setLayoutProperty('hospitals-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('hospitals-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('hospitals-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+    });
+
+    document.getElementById('toggle-police').addEventListener('change', (e) => {
+      map.setLayoutProperty('police-stations-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('police-stations-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('police-stations-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+    });
+
+    document.getElementById('toggle-schools').addEventListener('change', (e) => {
+      map.setLayoutProperty('schools-layer', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('schools-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+      map.setLayoutProperty('schools-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
+    });
 
       // Fire Stations popup
       map.on('click', 'fire-stations-layer', (e) => {
@@ -651,6 +727,273 @@
         map.getCanvas().style.cursor = '';
       });
     });
+
+    // Attribute Query Search Functionality
+    document.getElementById('searchButton').addEventListener('click', async () => {
+      const layer = document.getElementById('layerSelect').value;
+      const searchText = document.getElementById('searchInput').value.toLowerCase();
+      const resultsDiv = document.getElementById('searchResults');
+      resultsDiv.innerHTML = 'Searching...';
+
+      const source = map.getSource(layer);
+      if (!source) {
+        resultsDiv.innerHTML = 'Layer not found.';
+        return;
+      }
+
+      let data = source._data;
+      if (!data) {
+        resultsDiv.innerHTML = 'No data available.';
+        return;
+      }
+
+      const features = data.features.filter(f => {
+        const props = f.properties || {};
+        const name = (props.NAME || '').toLowerCase();
+        const city = (props.CITY || '').toLowerCase();
+        const address = (props.ADDRESS || '').toLowerCase();
+        return name.includes(searchText) || city.includes(searchText) || address.includes(searchText);
+      });
+
+      if (features.length === 0) {
+        resultsDiv.innerHTML = 'No results found.';
+        return;
+      }
+
+      resultsDiv.innerHTML = '';
+      features.forEach((feature, idx) => {
+        const button = document.createElement('button');
+        button.textContent = feature.properties.NAME || `Result ${idx+1}`;
+        button.style.display = 'block';
+        button.style.width = '100%';
+        button.style.marginBottom = '6px';
+        button.style.padding = '6px';
+        button.style.fontSize = '12px';
+        button.style.cursor = 'pointer';
+        button.style.backgroundColor = '#eee';
+        button.style.border = '1px solid #ccc';
+        button.style.borderRadius = '4px';
+
+        // Updated event handler: zoom, popup, and flashing highlight
+        button.addEventListener('click', () => {
+          map.flyTo({
+            center: feature.geometry.coordinates,
+            zoom: 15
+          });
+
+          new mapboxgl.Popup()
+            .setLngLat(feature.geometry.coordinates)
+            .setHTML(`<strong>${feature.properties.NAME || 'No Name'}</strong>`)
+            .addTo(map);
+
+          // Add a flashing circle highlight at the selected feature
+          const highlightId = 'highlight-circle';
+
+          if (map.getLayer(highlightId)) {
+            map.removeLayer(highlightId);
+            map.removeSource(highlightId);
+          }
+
+          map.addSource(highlightId, {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: feature.geometry.coordinates
+              }
+            }
+          });
+
+          map.addLayer({
+            id: highlightId,
+            type: 'circle',
+            source: highlightId,
+            paint: {
+              'circle-radius': 18,
+              'circle-color': '#FFD700',
+              'circle-opacity': 0.6,
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#FFA500'
+            }
+          });
+
+          // Auto-remove the highlight after 5 seconds
+          setTimeout(() => {
+            if (map.getLayer(highlightId)) {
+              map.removeLayer(highlightId);
+              map.removeSource(highlightId);
+            }
+          }, 5000);
+        });
+
+        resultsDiv.appendChild(button);
+      });
+    });
+
+    // Clear Search Functionality
+    document.getElementById('clearSearchButton').addEventListener('click', () => {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchResults').innerHTML = '';
+      
+      // Also remove any highlight circle if present
+      const highlightId = 'highlight-circle';
+      if (map.getLayer(highlightId)) {
+        map.removeLayer(highlightId);
+        map.removeSource(highlightId);
+      }
+    });
+
+    // Search Nearby Functionality
+    let nearbySearchEnabled = false;
+    let nearbyCenter = null;
+
+    document.getElementById('enableNearbySearch').addEventListener('click', () => {
+      nearbySearchEnabled = true;
+      document.getElementById('nearbyResults').innerHTML = '';
+      document.getElementById('nearbyScrollContainer').scrollTop = 0;
+      document.getElementById('nearbyResults').innerHTML = 'Click on the map to choose a location...';
+    });
+
+    map.on('click', (e) => {
+      if (!nearbySearchEnabled) return;
+
+      // Remove previous buffer circle and outline if they exist
+      if (map.getSource('search-buffer')) {
+        if (map.getLayer('search-buffer')) {
+          map.removeLayer('search-buffer');
+        }
+        if (map.getLayer('search-buffer-outline')) {
+          map.removeLayer('search-buffer-outline');
+        }
+        map.removeSource('search-buffer');
+      }
+
+      nearbyCenter = [e.lngLat.lng, e.lngLat.lat];
+      const radiusMiles = parseFloat(document.getElementById('nearbyDistance').value);
+      const radiusMeters = radiusMiles * 1609.34;
+
+      // Draw buffer circle on the map
+      const buffer = turf.circle(nearbyCenter, radiusMiles, {
+        steps: 64,
+        units: 'miles'
+      });
+
+      map.addSource('search-buffer', {
+        type: 'geojson',
+        data: buffer
+      });
+
+      map.addLayer({
+        id: 'search-buffer',
+        type: 'fill',
+        source: 'search-buffer',
+        paint: {
+          'fill-color': '#00FFFF',
+          'fill-opacity': 0.15
+        }
+      });
+
+      map.addLayer({
+        id: 'search-buffer-outline',
+        type: 'line',
+        source: 'search-buffer',
+        paint: {
+          'line-color': '#00FFFF',
+          'line-width': 2,
+          'line-dasharray': [2, 4]
+        }
+      });
+
+      const layersToSearch = ['schools', 'hospitals', 'fire-stations', 'police-stations'];
+      const results = [];
+
+      layersToSearch.forEach(sourceId => {
+        const source = map.getSource(sourceId);
+        if (!source || !source._data) return;
+
+        source._data.features.forEach(feature => {
+          if (!feature.geometry || feature.geometry.type !== 'Point') return;
+          const coords = feature.geometry.coordinates;
+          const distance = turf.distance(turf.point(nearbyCenter), turf.point(coords), { units: 'meters' });
+          if (distance <= radiusMeters) {
+            results.push({
+              source: sourceId,
+              properties: feature.properties,
+              coordinates: coords
+            });
+          }
+        });
+      });
+
+      const resultsDiv = document.getElementById('nearbyResults');
+      resultsDiv.innerHTML = results.length ? '' : 'No services found nearby.';
+
+      // Summarize Results
+      const summaryCounts = {
+        'schools': 0,
+        'hospitals': 0,
+        'fire-stations': 0,
+        'police-stations': 0
+      };
+
+      results.forEach(result => {
+        summaryCounts[result.source]++;
+      });
+
+
+      // Create a summary section
+      const summaryDiv = document.createElement('div');
+      summaryDiv.style.padding = '8px';
+      summaryDiv.style.marginBottom = '10px';
+      summaryDiv.style.backgroundColor = '#1e1e1e';
+      summaryDiv.style.border = '1px solid #555';
+      summaryDiv.style.borderRadius = '5px';
+      summaryDiv.style.color = '#ccc';
+      summaryDiv.style.fontSize = '12px';
+      summaryDiv.innerHTML = `
+        <strong>Summary:</strong><br/>
+        Schools: ${summaryCounts['schools']}<br/>
+        Hospitals: ${summaryCounts['hospitals']}<br/>
+        Fire Stations: ${summaryCounts['fire-stations']}<br/>
+        Police Stations: ${summaryCounts['police-stations']}
+      `;
+
+      // Insert the summary at the top of the nearbyResults
+      resultsDiv.appendChild(summaryDiv);
+
+      results.forEach((result, idx) => {
+        const button = document.createElement('button');
+        button.textContent = `${result.properties.NAME || `Result ${idx+1}`} (${result.source.replace('-', ' ')})`;
+        button.style.display = 'block';
+        button.style.width = '100%';
+        button.style.marginBottom = '6px';
+        button.style.padding = '6px';
+        button.style.fontSize = '12px';
+        button.style.cursor = 'pointer';
+        button.style.backgroundColor = '#eee';
+        button.style.border = '1px solid #ccc';
+        button.style.borderRadius = '4px';
+
+        button.addEventListener('click', () => {
+          map.flyTo({
+            center: result.coordinates,
+            zoom: 15
+          });
+
+          new mapboxgl.Popup()
+            .setLngLat(result.coordinates)
+            .setHTML(`<strong>${result.properties.NAME || 'No Name'}</strong>`)
+            .addTo(map);
+        });
+
+        resultsDiv.appendChild(button);
+      });
+
+      nearbySearchEnabled = false;
+    });
+
   </script>
+</div> <!-- end main-container -->
 </body>
 </html>
